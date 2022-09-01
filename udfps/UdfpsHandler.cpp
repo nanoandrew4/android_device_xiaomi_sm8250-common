@@ -4,13 +4,14 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#define LOG_TAG "UdfpsHandler.xiaomi_kona"
+#define LOG_TAG "UdfpsHander.xiaomi_kona"
 
 #include "UdfpsHandler.h"
 
 #include <android-base/logging.h>
 #include <android-base/unique_fd.h>
 #include <fcntl.h>
+#include <fstream>
 #include <poll.h>
 #include <thread>
 #include <unistd.h>
@@ -27,10 +28,23 @@
 #define TOUCH_MAGIC 0x5400
 #define TOUCH_IOC_SETMODE TOUCH_MAGIC + 0
 
+#define DISPPARAM_PATH "/sys/devices/platform/soc/ae00000.qcom,mdss_mdp/drm/card0/card0-DSI-1/disp_param"
+#define DISPPARAM_FOD_HBM_OFF "0xE0000"
+
 static const char* kFodUiPaths[] = {
         "/sys/devices/platform/soc/soc:qcom,dsi-display-primary/fod_ui",
         "/sys/devices/platform/soc/soc:qcom,dsi-display/fod_ui",
 };
+
+namespace {
+
+template <typename T>
+static void set(const std::string& path, const T& value) {
+    std::ofstream file(path);
+    file << value;
+}
+
+} // anonymous namespace
 
 static bool readBool(int fd) {
     char c;
@@ -51,7 +65,7 @@ static bool readBool(int fd) {
     return c != '0';
 }
 
-class XiaomiKonaUdfpsHandler : public UdfpsHandler {
+class XiaomiKonaUdfpsHander : public UdfpsHandler {
   public:
     void init(fingerprint_device_t *device) {
         mDevice = device;
@@ -84,12 +98,16 @@ class XiaomiKonaUdfpsHandler : public UdfpsHandler {
                     continue;
                 }
 
-                mDevice->extCmd(mDevice, COMMAND_NIT,
-                                readBool(fd) ? PARAM_NIT_FOD : PARAM_NIT_NONE);
-
-                int arg[2] = {TOUCH_FOD_ENABLE,
-                              readBool(fd) ? FOD_STATUS_ON : FOD_STATUS_OFF};
-                ioctl(touch_fd_.get(), TOUCH_IOC_SETMODE, &arg);
+                if (readBool(fd)) {
+                    mDevice->extCmd(mDevice, COMMAND_NIT, PARAM_NIT_FOD);
+                    int arg[2] = {TOUCH_FOD_ENABLE, FOD_STATUS_ON};
+                    ioctl(touch_fd_.get(), TOUCH_IOC_SETMODE, &arg);
+                } else {
+                    mDevice->extCmd(mDevice, COMMAND_NIT, PARAM_NIT_NONE);
+                    set(DISPPARAM_PATH, DISPPARAM_FOD_HBM_OFF);
+                    int arg[2] = {TOUCH_FOD_ENABLE, FOD_STATUS_OFF};
+                    ioctl(touch_fd_.get(), TOUCH_IOC_SETMODE, &arg);
+                }
             }
         }).detach();
     }
@@ -101,21 +119,13 @@ class XiaomiKonaUdfpsHandler : public UdfpsHandler {
     void onFingerUp() {
         // nothing
     }
-
-    void onAcquired(int32_t /*result*/, int32_t /*vendorCode*/) {
-        // nothing
-    }
-
-    void cancel() {
-        // nothing
-    }
   private:
     fingerprint_device_t *mDevice;
     android::base::unique_fd touch_fd_;
 };
 
 static UdfpsHandler* create() {
-    return new XiaomiKonaUdfpsHandler();
+    return new XiaomiKonaUdfpsHander();
 }
 
 static void destroy(UdfpsHandler* handler) {
