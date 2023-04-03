@@ -28,9 +28,6 @@
 #define TOUCH_MAGIC 0x5400
 #define TOUCH_IOC_SETMODE TOUCH_MAGIC + 0
 
-#define DISPPARAM_PATH "/sys/devices/platform/soc/ae00000.qcom,mdss_mdp/drm/card0/card0-DSI-1/disp_param"
-#define DISPPARAM_FOD_HBM_OFF "0xE0000"
-
 static const char* kFodUiPaths[] = {
         "/sys/devices/platform/soc/soc:qcom,dsi-display-primary/fod_ui",
         "/sys/devices/platform/soc/soc:qcom,dsi-display/fod_ui",
@@ -109,14 +106,12 @@ class XiaomiKonaUdfpsHandler : public UdfpsHandler {
     }
 
     void onFingerUp() {
-        // nothing
+        disableFOD();
     }
 
     void onAcquired(int32_t result, int32_t vendorCode) {
         if (result == FINGERPRINT_ACQUIRED_GOOD) {
-	    set(DISPPARAM_PATH, DISPPARAM_FOD_HBM_OFF);
-            int arg[2] = {TOUCH_FOD_ENABLE, FOD_STATUS_OFF};
-            ioctl(touch_fd_.get(), TOUCH_IOC_SETMODE, &arg);
+	        disableFOD();
         } else if (vendorCode == 21 || vendorCode == 23) {
             /*
              * vendorCode = 21 waiting for fingerprint authentication
@@ -128,7 +123,10 @@ class XiaomiKonaUdfpsHandler : public UdfpsHandler {
     }
 
     void cancel() {
-	set(DISPPARAM_PATH, DISPPARAM_FOD_HBM_OFF);
+	    disableFOD();
+    }
+
+    void disableFOD() {
         int arg[2] = {TOUCH_FOD_ENABLE, FOD_STATUS_OFF};
         ioctl(touch_fd_.get(), TOUCH_IOC_SETMODE, &arg);
     }

@@ -445,7 +445,8 @@ PRODUCT_PACKAGES += \
 
 # Touch
 PRODUCT_PACKAGES += \
-    vendor.lineage.touch@1.0-service.xiaomi
+    vendor.lineage.touch@1.0-service.xiaomi \
+    vendor.xiaomi.hardware.touchfeature@1.0.vendor
 
 # USB
 PRODUCT_PACKAGES += \
